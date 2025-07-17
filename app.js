@@ -20,24 +20,35 @@ const db = new pg.Client({
 
 db.connect();
 
-let vendorId = 1234
+
 app.post('/vendors', async (req, res) => {
     const id = uuidv4();
-    const name = req.query.name;
-    const bankAccount = req.query.bank_account;
-    const email = req.query.email;
-    const store_name = req.query.store_name;
+    const name = req.body.name;
+    const bankAccount = req.body.bank_account;
+    const email = req.body.email;
+    const store_name = req.body.store_name;
 
+    
+    console.log(id,name,bankAccount,email,store_name)
 
     try {
         const result = await db.query(
-            'INSERT INTO vendors (id, name, bank_account, email, store_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            'INSERT INTO vendors (id, name, bank_account, email, store_name) VALUES ($1, $2, $3, $4, $5) RETURNING id, store_name',
              [id, name, bankAccount, email, store_name]
         );
 
-        vendorId = result.rows[0].id;
+        const vendorId = result.rows[0].id;
+        const vendorStore_name = result.rows[0].store_name;
 
-        res.json(vendorId)
+        try {
+            await db.query('insert into vendor_profiles (vendor_id, store_name) values ($1, $2)', [vendorId,vendorStore_name])
+            
+        } catch (error) {
+            console.log(error)
+        }
+        
+        
+        res.json({ vendorId, vendorStore_name });
     } catch (error) {
         console.log(error)
     }
@@ -47,59 +58,85 @@ app.post('/vendors', async (req, res) => {
 
 app.post('/orders', async(req, res) => {
     const order_id = uuidv4();
-    const Amount = req.query.amount;
-    const status = req.query.status;
-    const timeStamp = req.query.timestamp;
-    const vendor_id = 'fbd0cdf7-24c2-49c6-8e0e-f4af53773c74'
+    const Amount = req.body.amount;
+    const status = req.body.status;
+    const timeStamp = req.body.timestamp;
+    const store_name= 'abolarin store'
 
+    const result= await db.query('select * from vendor_profiles where store_name = $1', [store_name])
 
-    
-    try {
-        const result = await db.query(
-            'INSERT INTO orders (order_id, amount, status, timestamp, vendor_id) VALUES ($1, $2, $3, $4, $5) RETURNING order_id',
-             [order_id,Amount,status,timeStamp, vendor_id]
-        );
+    const vendor_id = result.rows[0].vendor_id ;    
 
-        const OrderId = result.rows[0].order_id;
-        res.json(OrderId)
+    console.log(vendor_id);   
 
-    } catch (error) {
-        console.log(error)
+    if (result.rows.length > 0) {
+         try {
+            
+            const result = await db.query(
+                'INSERT INTO orders (order_id, amount, status, timestamp, vendor_id) VALUES ($1, $2, $3, $4, $5) RETURNING order_id',
+                [order_id,Amount,status,timeStamp, vendor_id]
+            );
+
+            const OrderId = result.rows[0].order_id;
+            res.json(OrderId)
+
+        } catch (error) {
+            console.log(error)
+        }
+    } else {
+        console.log('store_name is not equal to vendor')
     }
+
 
 });
 
 
 app.get('/payout', async(req,res) => {
-    try {
-        const vendorId = 'fbd0cdf7-24c2-49c6-8e0e-f4af53773c74';
-        const status = 'pending';
 
-        const result = await db.query(
-            'SELECT vendors.id AS vendor_id,vendors.name,vendors.store_name,orders.order_id,orders.amount, orders.status FROM vendors JOIN orders ON vendors.id = orders.vendor_id WHERE vendors.id = $1;', [vendorId]
-        );
+        const store_name= 'abolarin store'
 
-        const data = result.rows
-        console.log(data)
-        const total_amount = data[0].amount + data[1].amount + data[2].amount;
-        const platform_fee = total_amount * 0.05;
-        const net_fee = platform_fee + total_amount;
+        const result = await db.query('select * from vendor_profiles where store_name = $1', [store_name])
+
+        const vendor_id = result.rows[0].vendor_id ; 
+
+        if (result.rows.length > 0) {
+            try {
         
+                const status = 'pending';
+                //const result = await db.query('select * from orders')
+                const result = await db.query(
+                        `SELECT vendors.name, orders.amount 
+                        FROM vendors 
+                        JOIN orders ON vendors.id = orders.vendor_id 
+                        WHERE vendors.id = $1 AND orders.status = 'completed';`,
+                        [vendor_id]
+                    );
 
-        console.log(total_amount)
-        console.log(platform_fee)
-        console.log(net_fee)
+                const data = result.rows
+                console.log(data)
+                const total_amount = data[0].amount + data[1].amount + data[2].amount;
+                const platform_fee = total_amount * 0.05;
+                const net_fee = platform_fee + total_amount;
+            
 
-       res.json({
-            name: data[0]?.name,             
-            total_orders: data.length,
-            total_amount,
-            platform_fee,
-            net_fee
-        });
-    } catch (error) {
-        console.log(error)
-    }
+                //console.log(total_amount)
+                //console.log(platform_fee)
+                //console.log(net_fee)
+
+                res.json({
+                    name: data[0]?.name,             
+                        total_orders: data.length,
+                        total_amount,
+                        platform_fee,
+                        net_fee
+                    });
+                } catch (error) {
+                    console.log(error)
+                }
+
+        } else {
+            
+        }
 })
 
 

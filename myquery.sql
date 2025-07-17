@@ -16,3 +16,8 @@ CREATE TABLE IF NOT EXISTS orders (
     vendor_id TEXT NOT NULL,
     FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS vendor_profiles (
+    vendor_id TEXT PRIMARY KEY,
+    store_name TEXT NOT NULL,
+    FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
+);
